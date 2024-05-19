@@ -1,0 +1,12 @@
+pyautogui
+numpy
+imageio
+requests
+psd_tools
+tkinterdnd2
+pillow
+opencv-python
+numba
+scikit-learn
+scipy
+pywin32
