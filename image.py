@@ -31,7 +31,9 @@ FILTERS = {    # [R, G, B, A, I] RGB: Red, green and blue values. A: Alpha chann
         "green": [0.4, 0.9, 0.4, 1.0, 0.0],
         "inverse": [1.0, 1.0, 1.0, 1.0, 1.0],
         "changepalette": [1, 1, 1, 1, 0],
-        "identity_tuple": [(1, 0, 0), (0, 1, 0), (0, 0, 1), 1, 0]
+        "identity_tuple": [(1, 0, 0), (0, 1, 0), (0, 0, 1), 1, 0],
+        "greyscale": [],
+        "custom": []
     }
 PALETTES = {
     "red": [[255, 255, 255, 255], [244, 104, 66, 255], [170, 47, 13, 255], [0, 0, 0, 255]],

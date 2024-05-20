@@ -1,6 +1,7 @@
 pyautogui
 numpy
 imageio
+imageio[ffmpeg]
 requests
 psd_tools
 tkinterdnd2
