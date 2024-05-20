@@ -1158,7 +1158,7 @@ class ImageEditorWindow:
 
             try:
                 while True:
-                    frames.append(gif.copy())
+                    frames.append(gif.copy().convert("RGBA"))
                     delays.append(gif.info['duration'])
                     non_zero = list(filter(lambda x: x != 0, delays))
                     min_value = min(non_zero) if non_zero else 20
@@ -2497,7 +2497,6 @@ class ImageEditorWindow:
         is_video_path = is_video(path)
         if is_video_path:
             try:
-
                 self.convert_video_to_gif(path)
             except Exception as e:
                 traceback.print_exc()
@@ -2527,7 +2526,6 @@ class ImageEditorWindow:
         if self.outline:
             self.outline_slider.set(1)
             self.outline_slider.config(to=int(min(self.frames[0].width, self.frames[0].height) / 8))
-        self.play()
         if not is_gif(self.file_path): self.stop()
         if is_video_path:
             try: os.remove('output.gif')
