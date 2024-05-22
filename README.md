@@ -51,8 +51,13 @@ These GIFs where recorded in mp4 and then converted to GIF/resized with this pro
 ## Known bugs
 - Pressing some 'Cancel' buttons might still apply the changes.
 - The magic wand tool is currently not getting the correct position in the image. This will be fixed.
-- 
+
+## Added features
+- C implementation for dithering, so now it is very fast (at least compared to what it was before). The rough preview in the filter section is practically real time now.
+
 ## To be added
 - [ ] Proper 'Kernel' window.
 - [ ] More customizable 'Add Noise' window.
 - [ ] Image cropping.
+- [ ] More functions running in C.
+- [ ] Euclidean Distance Transform for the outline function.
