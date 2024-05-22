@@ -301,8 +301,11 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.colors = 16
         self.mirror = None
         self.greyscale = False
+        self.one_palette = True
         self.pre_palette = None
         self.frame_num = 0
+        self.bayer_strength = 16
+        self.bayer_size = 2
 
         super().__init__(parent)
 
@@ -414,6 +417,33 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.mirror_combobox.bind("<<ComboboxSelected>>", self.update_values)
         self.options_entries.append([self.mirroring, self.mirror_label, self.mirror_combobox])
 
+        # ONE PALETTE
+        self.use_one_palette = tk.BooleanVar(value=self.one_palette)
+        self.one_palette_check = tk.Checkbutton(
+            master, text="Use one palette for all frames", variable=self.use_one_palette, command=self.update_values,
+            bg=self.bg_color, fg=self.text_color, selectcolor=self.button_color, activebackground=self.bg_color,
+            activeforeground=self.text_color
+        )
+        self.one_palette_check.grid(row=8, column=0, padx=5, pady=5, sticky="w")
+
+        # BAYERS SETTINGS
+        self.bayer_size_label = tk.Label(master, text=f"Bayer Strength ({self.bayer_strength:.2f})", bg=self.bg_color,
+                                  fg=self.text_color)
+        self.bayer_strength_label = tk.Label(master, text=f"Bayer Matrix Size ({self.bayer_size})", bg=self.bg_color, fg=self.text_color)
+        self.bayer_size_entry = tk.Scale(master, from_=1, to=5, orient="horizontal", showvalue=False,
+                                  bg=self.bg_color, fg=self.text_color, activebackground=self.bg_color,
+                                  troughcolor=self.button_color, highlightthickness=0, command=self.update_values)
+        self.bayer_strength_entry = tk.Scale(master, from_=1, to=50, orient="horizontal", showvalue=False,
+                                  bg=self.bg_color, fg=self.text_color, activebackground=self.bg_color,
+                                  troughcolor=self.button_color, highlightthickness=0, command=self.update_values)
+        self.greycol_entry = tk.Entry(master, textvariable=self.colors)
+        self.bayer_size_entry.set(self.bayer_size)
+        self.bayer_strength_entry.set(self.bayer_strength)
+        self.bayer_size_label.grid(row=9, column=0, padx=5, pady=5)
+        self.bayer_strength_label.grid(row=9, column=1, padx=5, pady=5)
+        self.bayer_size_entry.grid(row=10, column=0, padx=5, pady=5)
+        self.bayer_strength_entry.grid(row=10, column=1, padx=5, pady=5)
+
         for i in range(len(self.images_preview)):
             w, h = self.images_preview[i].size
             h2 = 400
@@ -460,11 +490,16 @@ class FilterWindow(tk.simpledialog.Dialog):
             self.filter_type = "identity"
 
         self.palette = self.palette_combobox.get().lower() if self.changed_palette else self.pre_palette
+        self.one_palette = bool(self.use_one_palette.get())
+        self.bayer_size = int(self.bayer_size_entry.get())
+        self.bayer_strength = self.bayer_strength_entry.get()
+        self.bayer_strength_label.config(text=f"Bayer Strength ({self.bayer_strength:.2f})")
+        self.bayer_size_label.config(text=f"Bayer Matrix Size ({self.bayer_size})")
 
         self.dither_type = self.dither_combobox.get() if self.dithering.get() else None
         tmp_col = self.dither_colors
         self.dither_colors = int(self.dither_col_entry.get()) if self.dithering.get() and self.dither_col_entry.get() != ""  else self.dither_colors
-        if tmp_col != self.dither_colors:
+        if tmp_col != self.dither_colors or not self.one_palette:
             self.pre_palette = im.findPalette(np.array(self.images_preview[self.frame_num]), num_colors=self.dither_colors)
         self.colors = int(self.greycol_entry.get()) if self.greycol_entry.get() and self.greyscale else self.colors
         self.mirror = self.mirror_combobox.get() if self.mirroring.get() and self.mirroring.get() else None
@@ -478,7 +513,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         img = im.imageFilter(np.array(self.images_preview[self.frame_num]), self.filter_type, customFilter=self.custom_filter, luminance=self.luminance,
                              contrast=self.contrast, saturation=self.saturation, colors=self.colors,
                              ditherType=self.dither_type, ditherColors=self.dither_colors, pixelSize=self.pixelization,
-                             customPalette=self.palette, mirror=self.mirror)
+                             customPalette=self.palette, mirror=self.mirror, bayer=(self.bayer_size, self.bayer_strength))
         self.photoimg = ImageTk.PhotoImage(Image.fromarray(img))
         self.image_label.config(image=self.photoimg)
 
@@ -505,7 +540,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         if selected_type == "Change Palette":
             self.changed_palette = True
 
-            palettes = list(im.palettes.keys())
+            palettes = list(im.PALETTES.keys())
             palettes = [i.capitalize() for i in palettes]
             self.palette_label = tk.Label(self.palette_frame, text="Palette:", bg=self.bg_color, fg=self.text_color)
             self.palette_label.pack(side=tk.LEFT, padx=5)
@@ -798,6 +833,7 @@ class ImageEditorWindow:
         self.copy_image = True
         self.action_label = None
         self.after_id = None
+        self.animation_thread = None
 
         if self.theme == "dark":
             self.bg_color = "#444444"
@@ -1732,6 +1768,7 @@ class ImageEditorWindow:
             fpix = dialog.pixelization
             fcustom = dialog.custom_filter
             fpalette = dialog.palette
+            fonepal, fprepal = dialog.one_palette, dialog.pre_palette
             if isinstance(dialog.palette, str): fpalette = fpalette.lower()
             else: fpalette = None
             fmirror, fgreycol = dialog.mirror, dialog.colors
@@ -1740,6 +1777,8 @@ class ImageEditorWindow:
         else:
             ftype = args[0]
             fpix = args[1]
+        if not fpalette and fonepal and fdittype:
+            fpalette = np.array(fprepal).copy()
         param_dict = {
             "pixelSize": fpix, "saturation": fsat, "contrast": fcon, "luminance": flum,
             "customFilter": fcustom, "mirror": fmirror, "colors": fgreycol,
@@ -1770,8 +1809,8 @@ class ImageEditorWindow:
         text += 'No filter\n' if ftype == 'identity' else ftype.capitalize()+int(fcustom != [1, 1, 1, 1, 0])*f': {fcustom}'+int(ftype == 'greyscale')*f': {fgreycol} colors'+'\n'
         text += f'Contrast: {fcon}'*int(fcon != 1) + ('|'*int(fcon != 1) + f'Saturation: {fsat}')*int(fsat != 1) + ('|'*int(fcon != 1 or fsat != 1) + f'Luminance: {flum}')*int(flum != 1)+'\n'
         text += f'Pixelization: {fpix}\n' if fpix > 1 else ''
-        text += f'Palette: {fpalette}\n' if fpalette else ''
-        text += '' if not fdittype else f'Dithering: {fdittype.capitalize()}'+int(ftype == "change_palette")*f', {len(im.PALETTES[fpalette if fpalette else "red"])} colors\n'+int(ftype != "change_palette" and fdittype != "halftone")*f', {fditcol} colors\n'
+        text += f'Palette: {fpalette}\n' if isinstance(fpalette, str) else ''
+        text += '' if not fdittype else f'Dithering: {fdittype.capitalize()}'+int(ftype == "change_palette")*f', {len(im.PALETTES[fpalette if isinstance(fpalette, str) else "red"])} colors\n'+int(ftype != "change_palette" and fdittype != "halftone")*f', {fditcol} colors\n'
         text += '' if not fmirror else f'Mirror: {fmirror.capitalize()}\n'
         self.show_action_label(text)
 
@@ -2364,24 +2403,27 @@ class ImageEditorWindow:
         self.play_button["state"] = "disabled"
         self.pause_button["state"] = "active"
         self.stop_button["state"] = "active"
+        if self.animation_thread and self.animation_thread.is_alive(): return
         self.animation_thread = Thread(target=self.animate)
         self.animation_thread.start()
 
     def pause(self, event=None, from_frame=False):
         try:
             if not is_gif(self.action_list[self.current_action][1]) or len(self.frames) <= 1:
-                return None
-        except: pass
-        if self.pause_button["state"] == "disabled" and not from_frame:
-            self.play()
-            return None
+                return
+        except:
+            pass
         if not self.action_list:
             messagebox.showerror("File not loaded", "No file loaded, please load image/gif/video.")
-            return None
+            return
+        if self.pause_button["state"] == "disabled" and not from_frame:
+            self.play()
+            return
         self.play_button["state"] = "active"
         self.pause_button["state"] = "disabled"
         self.stop_button["state"] = "active"
-        self.root.after_cancel(self.animation_id)
+        try: self.root.after_cancel(self.animation_id)
+        except: pass
         self.update_frame()
         return True
 
@@ -2409,7 +2451,8 @@ class ImageEditorWindow:
         self.update_frame()
         if not is_gif(self.action_list[self.current_action][1]) or len(self.frames) <= 1:
             return 1
-        self.root.after_cancel(self.animation_id)
+        try: self.root.after_cancel(self.animation_id)
+        except: pass
         self.update_frame()
 
     def animate(self):
@@ -2505,7 +2548,7 @@ class ImageEditorWindow:
             messagebox.showerror("Invalid file type", "Please select a valid image file.")
             return None
         self.file_path = "output.gif" if is_video_path else path
-        if hasattr(self, 'animation_thread'):
+        if self.animation_thread:
             self.stop()
         self.reset_view()
         size = get_image_size(self.file_path)
@@ -2530,7 +2573,7 @@ class ImageEditorWindow:
         if is_video_path:
             try: os.remove('output.gif')
             except: pass
-
+        self.play()
         return 1
 
     def save_image(self, save_p=None):
@@ -2627,7 +2670,6 @@ class ImageEditorWindow:
             if params[0] == '':
                 self.frames = [Image.fromarray(im.imageFilter(np.array(frame.convert("RGBA")), filter)) for frame in self.original_frames]
             else:
-                print(params)
                 param_dict = {param.split('=')[0]: check_type(param.split('=')[1]) for param in params}
                 self.frames = [Image.fromarray(im.imageFilter(np.array(frame.convert("RGBA")), filter, **param_dict)) for frame in self.original_frames]
         except Exception as e:

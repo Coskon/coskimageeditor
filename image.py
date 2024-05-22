@@ -10,6 +10,7 @@ from collections import Counter
 from scipy.signal import convolve2d
 from cv2 import dilate
 from typing import Union
+from c_image import *
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -70,7 +71,7 @@ RED, GREEN, BLUE, YELLOW, PURPLE, ORANGE, PINK, BROWN, BLACK, WHITE, GRAY, CYAN,
     [255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 0, 255], \
     [128, 0, 128, 255], [255, 165, 0, 255], [255, 192, 203, 255], [139, 69, 19, 255], \
     [0, 0, 0, 255], [255, 255, 255, 255], [128, 128, 128, 255], [0, 255, 255, 255], \
-    [255, 0, 255, 255], [128, 128, 0, 255], [0, 128, 128, 255], [0, 255, 0, 255]
+    [255, 0, 255, 255], [128, 128, 0, 255], [0, 128, 128, 255], [50, 205, 50, 255]
 
 
 def findClosest(target_color: Union[np.ndarray, list], color_palette: np.ndarray) -> np.ndarray:
@@ -406,7 +407,8 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
                 luminance: float = 1.0, colors: int = 4, ditherType: str = None, ditherColors: int = 2,
                 saturation: float = 1.0, contrast: float = 1.0, pixelSize: int = 1, resizeMethod: str = 'nearest-neighbor',
                 threshold: tuple[int, int] = None, customPalette: Union[np.ndarray, list, None] = None,
-                paletteAlgorithm: str = 'kmeans', mirror: str = None) -> np.ndarray:
+                paletteAlgorithm: str = 'kmeans', mirror: str = None, useCDither: bool = True,
+                bayer: tuple[int, float] = (2, 16.0)) -> np.ndarray:
     """
     Modify an image by using filters, dithering, etc.
 
@@ -430,6 +432,7 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
     :param ditherType: Type of dithering: halftone, floyd-steinberg, hor-floyd-steinberg, fast-floyd-steinberg.
         Halftone only works with greyscale images (use greyscale filter)
     :param ditherColors: Amount of colors of the palette to be extracted from the image for dithering (Floyd-Steinberg)
+    :param useCDither: Whether to use or not a C implementation of dithering, being much faster.
     :param paletteAlgorithm: Algorithm to search for the best colors to grab based on ditherColors. Defaults to KMeans,
         anything else will use "color popularity" method
     :param customPalette: Specify a custom palette for dithering. You can also use pre-existing palettes from the
@@ -439,6 +442,7 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
     :param pixelSize: Defaults to 1. If changed it pixelates the image, 1 is the best resolution, then 2, 3, ...
     :param resizeMethod: When changing the pixelSize, you can change how it resizes: nearest-neighbor, bilinear
     :param mirror: Mirrors the image horizontally (h, hor, horizontal) or vertically (v, ver, vert, vertical)
+    :param bayer: Tuple containing the size of the bayer matrix and strength of the effect. Used with halftone dithering.
     :return: Modified image as a ndarray
     """
     if not isinstance(filter_type, str):
@@ -517,7 +521,12 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
     if ditherType:
         ditherType = ditherType.replace(" ", "-").lower()
         grey = greyscale or sval == 0
-        if ditherType == 'halftone' and grey:
+        if useCDither:
+            try:
+                if not customPalette: customPalette = findPalette(pixel, ditherColors, paletteAlgorithm)
+            except: pass
+            pixel = CDither(pixel, palette=customPalette, type=ditherType, bayerSize=bayer[0], bayerStrength=bayer[1])
+        elif ditherType == 'halftone' and grey:
             if byw:
                 colorDiv = np.arange(0, 255 + 255 / colors, 255 / colors).tolist()
                 intervals = [[int(colorDiv[i]), int(colorDiv[i + 1])] for i in range(colors)]
@@ -695,7 +704,7 @@ def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor
     Adds an outline to an image.
 
     Outline types:
-        -box: Sharp edges
+        -box/square: Sharp edges
 
         -circle: Smooth edges
 
@@ -706,8 +715,11 @@ def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor
     :param outlineColor: Color of the outline
     :param threshold: Transparency threshold to consider as a valid pixel to add outline
     :param outlineType: Type of outline (see above)
+    :param useCOutline: Whether to use an implementation in C to make it faster.
     :return: Outlined image
     """
+    img = iio.imread(image) if isinstance(image, str) else image
+
     thickness += 2
 
     def find_nonzero_bounds(arr):
@@ -718,8 +730,6 @@ def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor
 
     if thickness % 2 == 0 or thickness < 0:
         raise ValueError("Thickness must be odd and > 0")
-
-    img = iio.imread(image) if isinstance(image, str) else image
 
     if len(img.shape) > 3:
         raise ValueError("Invalid image.")
@@ -1070,9 +1080,11 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
             '11,10,00': '⠋', '11,10,01': '⠫', '11,10,10': '⠏', '11,10,11': '⠯', '11,11,00': '⠛', '11,11,01': '⠻',
             '11,11,10': '⠟', '11,11,11': '⠿'
         }
-        densities = [" .:-=+*#%@",
-                     " ░▒▓█",
-                     " .'` ^ ,:;Il!i><~+_-?][}{1)(|\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"]
+        densities = [
+            r" .:-=+*#%@",
+            r" ░▒▓█",
+            r" .'` ^ ,:;Il!i><~+_-?][}{1)(|\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"
+        ]
 
         asciiString = asciiString.lower()
         if asciiString in ["braille", "braille8"]: braille = 1
@@ -1089,7 +1101,8 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
     if hasAlpha != 4: img = np.dstack((img, np.full((h, w), 255, dtype=np.uint8)))
     if braille == 1: size_tuple = (size, round(h*size/w))
     else: size_tuple = (size, round(h*size/w))
-    img = imageFilter(imageFilter(resizeImage(img, size=size_tuple), "identity", contrast=contrast, ditherType=dither_type, threshold=threshold), "greyscale", colors=2)
+    img = imageFilter(imageFilter(resizeImage(img, size=size_tuple), "identity", contrast=contrast, ditherType=dither_type,
+                                  threshold=threshold), "greyscale", colors=2)
     if accentuate: img = imageKernel(img, "inverse_edge", thickness=thck, sharpness=1)
     if smooth: img = imageKernel(img, "box_blur", kernelSize=3)
     if invert: img = imageFilter(img, "inverse")
@@ -1391,22 +1404,14 @@ def ditherImage(image: Union[str, np.ndarray], colors: int = 6, rsz: float = 0.5
     except: pass
     N = 2 if type in ["atkinson", "stucki"] else 1
     image = extendImage(image, N)
+    plt = np.array(findPalette(resizeImage(image, scale=rsz), colors)) if not palette else np.array(palette)
     if type == "atkinson":
-        img = jit_dither_atkinson(image.astype(float), h=h, w=w,
-                               palette=np.array(
-                                   findPalette(resizeImage(image, scale=rsz), colors)) if not palette else np.array(
-                                   palette)
-                               ).astype(np.uint8)
+        img = jit_dither_atkinson(image.astype(float), h=h, w=w, palette=plt)
     elif type == "stucki":
-        img = jit_dither_stucki(image.astype(float), h=h, w=w,
-                               palette=np.array(
-                                   findPalette(resizeImage(image, scale=rsz), colors)) if not palette else np.array(
-                                   palette)
-                               ).astype(np.uint8)
+        img = jit_dither_stucki(image.astype(float), h=h, w=w, palette=plt)
     else:
-        img = jit_dither_floyd(image.astype(float), h=h, w=w,
-                         palette=np.array(findPalette(resizeImage(image, scale=rsz), colors)) if not palette else np.array(palette)
-                         ).astype(np.uint8)
+        img = jit_dither_floyd(image.astype(float), h=h, w=w, palette=plt)
+    img = img.astype(np.uint8)
     newh, neww, _ = img.shape
     top, bottom, left, right = N, newh - N, N, neww - N
     return img[top:bottom, left:right]
