@@ -1,7 +1,7 @@
 import os
 import imageio.v3 as iio
 from numba import jit
-import copy
+from copy import deepcopy
 import numpy as np
 from PIL import Image
 from PIL.ImageDraw import floodfill
@@ -10,7 +10,7 @@ from collections import Counter
 from scipy.signal import convolve2d
 from cv2 import dilate
 from typing import Union
-from c_image import *
+from c_image import CDither, COutline
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -51,7 +51,7 @@ PALETTES = {
               [160, 130, 80, 255], [140, 110, 60, 255], [120, 90, 40, 255], [100, 70, 20, 255], [80, 50, 0, 255],
               [60, 20, 10, 255], [90, 50, 30, 255], [80, 40, 20, 255], [70, 30, 10, 255], [40, 10, 0, 255]],
     "purple": [[0, 0, 0, 255], [90, 30, 140, 255], [230, 220, 225, 255], [40, 7, 25, 255]],
-    "gameboy": [[202,220,159,255], [15,56,15,255],[48,98,48,255],[139,172,15,255],[155,188,15,255]],
+    "gameboy": [[202, 220, 159, 255], [15, 56, 15, 255], [48, 98, 48, 255], [139, 172, 15, 255], [155, 188, 15, 255]],
     "random": randomplt.tolist(),
     "random1": [[70, 19, 5, 255], [194, 84, 249, 255], [43, 33, 111, 255], [196, 96, 138, 255], [111, 145, 149, 255],
                 [190, 33, 114, 255], [38, 34, 113, 255], [107, 34, 27, 255], [102, 252, 214, 255], [37, 91, 188, 255]],
@@ -108,7 +108,7 @@ def findPalette(image_pixels: np.ndarray, num_colors: int, findType: str = 'kmea
         cluster_centers = kmeans.cluster_centers_
         return cluster_centers.astype(int)
     else:
-        lightness_values = (0.299*image_pixels[:,:,0]+0.587*image_pixels[:,:,1]+0.114*image_pixels[:,:,2]).flatten()
+        lightness_values = (0.299 * image_pixels[:, :, 0] + 0.587 * image_pixels[:, :, 1] + 0.114 * image_pixels[:, :, 2]).flatten()
         selected_indices = np.argsort(lightness_values)[:num_colors]
         lightest_colors = [tuple(image_pixels.ravel()[i:i+3]) for i in selected_indices]
         image_pixels = image_pixels.reshape(-1, 4)
@@ -233,13 +233,13 @@ def resizeImage(image: Union[str, np.ndarray], scale: float = 1, size: tuple[int
 
 
 def gaussianKernel(N: int, sigma: float) -> list:
-    kernel = np.zeros((N, N))  # Create an empty NxN kernel
-    center = N // 2  # Calculate the center position
-    norm_factor = 2 * np.pi * sigma ** 2  # Calculate the normalization factor
+    kernel = np.zeros((N, N))
+    center = N // 2
+    norm_factor = 2 * np.pi * sigma ** 2
     for i in range(N):
         for j in range(N):
-            x, y = i - center, j - center  # Calculate the distance from the center
-            kernel[i, j] = np.exp(-(x ** 2 + y ** 2) / (2 * sigma ** 2)) / norm_factor  # Calculate the Gaussian value for the current position
+            x, y = i - center, j - center
+            kernel[i, j] = np.exp(-(x ** 2 + y ** 2) / (2 * sigma ** 2)) / norm_factor
     return kernel.tolist()
 
 
@@ -282,7 +282,7 @@ def motionKernel(N: int, direction: str, pos: int) -> list:
 
 
 def imageKernel(image: Union[str, np.ndarray], kernelType: str, customKernel: Union[np.ndarray, list] = np.ones((3,3)).tolist(),
-                passes: int = 1, gaussian: Union[np.ndarray, list[int, float]] = [3, 1.0], kernelSize: int = 3,
+                passes: int = 1, gaussian: Union[list[int, float], np.ndarray, None] = None, kernelSize: int = 3,
                 motionDirection: str = "vertical", motionPosition: int = 1, power: int = None, invert: bool = False,
                 fastMode: bool = True, transparent: bool = False,  keepTransparency: bool = True, thickness: int = None,
                 sharpness: float = 0.0) -> np.ndarray:
@@ -318,7 +318,7 @@ def imageKernel(image: Union[str, np.ndarray], kernelType: str, customKernel: Un
     :param sharpness: Changes the sharpness of the edges. From 0.0 (most dull) to 1.0 (sharpest)
     :return: Modified image as a ndarray
     """
-
+    if gaussian is None: gaussian = [3, 1.0]
     if not isinstance(kernelSize, int) or kernelSize % 2 == 0 or kernelSize < 3: raise ValueError(
         'Size of the kernel must be an odd number greater or equal than 3.')
     if not isinstance(customKernel, list) or not all(len(row) == len(customKernel) for row in customKernel) \
@@ -369,7 +369,7 @@ def imageKernel(image: Union[str, np.ndarray], kernelType: str, customKernel: Un
             cropped_image = result[top:bottom, left:right]
             pixel = np.dstack((cropped_image, np.full((h, w, 1), 255, dtype=cropped_image.dtype))).astype(np.uint8)
         else:
-            pixel = copy.deepcopy(img)
+            pixel = deepcopy(img)
 
             def convolution(i, j):
                 conv = 0
@@ -398,12 +398,12 @@ def imageKernel(image: Union[str, np.ndarray], kernelType: str, customKernel: Un
         if transparent:
             cond = np.min(pixel, axis=-1) < 150 if cond1 else np.min(pixel, axis=-1) > 150
             pixel[cond] = [0, 0, 0, 0]
-        if passes > 1 and _ != passes-1: img = copy.deepcopy(pixel)
+        if passes > 1 and _ != passes-1: img = deepcopy(pixel)
     if keepTransparency: pixel = np.dstack((pixel[:, :, 0], pixel[:, :, 1], pixel[:, :, 2], alpha_channel))
     return pixel
 
 
-def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Union[np.ndarray, list, None] = None,
+def imageFilter(image: Union[str, np.ndarray], filter_type: str, customFilter: Union[np.ndarray, list, None] = None,
                 luminance: float = 1.0, colors: int = 4, ditherType: str = None, ditherColors: int = 2,
                 saturation: float = 1.0, contrast: float = 1.0, pixelSize: int = 1, resizeMethod: str = 'nearest-neighbor',
                 threshold: tuple[int, int] = None, customPalette: Union[np.ndarray, list, None] = None,
@@ -443,6 +443,7 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
     :param resizeMethod: When changing the pixelSize, you can change how it resizes: nearest-neighbor, bilinear
     :param mirror: Mirrors the image horizontally (h, hor, horizontal) or vertically (v, ver, vert, vertical)
     :param bayer: Tuple containing the size of the bayer matrix and strength of the effect. Used with halftone dithering.
+    :param:
     :return: Modified image as a ndarray
     """
     if not isinstance(filter_type, str):
@@ -473,7 +474,7 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
     sval = saturation
     if hasAlpha != 4: img = np.dstack((img, np.full((h, w), 255, dtype=np.uint8)))
 
-    pixel = copy.deepcopy(img)
+    pixel = deepcopy(img)
     if pixelSize != 1:
         pixelSize = int(pixelSize)
         rh, rw = h // pixelSize, w // pixelSize
@@ -524,8 +525,9 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
         if useCDither:
             try:
                 if not customPalette: customPalette = findPalette(pixel, ditherColors, paletteAlgorithm)
-            except: pass
-            pixel = CDither(pixel, palette=customPalette, type=ditherType, bayerSize=bayer[0], bayerStrength=bayer[1])
+            except:
+                pass
+            pixel = CDither(pixel, palette=np.array(customPalette), type=ditherType, bayerSize=bayer[0], bayerStrength=bayer[1])
         elif ditherType == 'halftone' and grey:
             if byw:
                 colorDiv = np.arange(0, 255 + 255 / colors, 255 / colors).tolist()
@@ -591,7 +593,7 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
                 (1 - dx) * dy * pixel[y2, x1, channel] +
                 dx * (1 - dy) * pixel[y1, x2, channel] +
                 dx * dy * pixel[y2, x2, channel]
-                for channel in range(4)  # Assumes RGB channels
+                for channel in range(4)
             ]
             pixel = np.stack(interpolated_channels, axis=-1).astype(np.uint8)
         else:
@@ -605,7 +607,7 @@ def imageFilter(image:Union[str, np.ndarray], filter_type: str, customFilter: Un
 
 def imageAddons(image: Union[str, np.ndarray], addonType: str, ellipse: tuple[int, int] = (None, None), radius = None,
                 F: float = None, onlyAddon: bool = False, gradientType: str = 'horizontal', invert: bool = False,
-                vignetteColor: list = [0, 0, 0, 255], bloom: tuple[float, int, int] = (1.1, 8, 190)) -> np.ndarray:
+                vignetteColor: Union[list, np.ndarray, None] = None, bloom: tuple[float, int, int] = (1.1, 8, 190)) -> np.ndarray:
     """
     Add extra things to an image (vignette, bloom, gradient)
 
@@ -628,6 +630,7 @@ def imageAddons(image: Union[str, np.ndarray], addonType: str, ellipse: tuple[in
     :param bloom: Bloom parameters (see above)
     :return:
     """
+    if vignetteColor is None: vignetteColor = [0, 0, 0, 255]
     if isinstance(image, str): image = iio.imread(image)
     h, w, hasAlpha = image.shape
     if hasAlpha != 4: image = np.dstack((image, np.full((h, w), 255, dtype=np.uint8)))
@@ -684,21 +687,21 @@ def imageAddons(image: Union[str, np.ndarray], addonType: str, ellipse: tuple[in
             return imgtmp
         blmimage = blm(image, 0)
         custom_kernel = np.array(circleKernel(bloom[1]))
-        blurred_image = blmimage.copy()
-        for channel in range(4):  # Loop over RGB channels (0, 1, 2)
+        blurred_image = deepcopy(blmimage)
+        for channel in range(4):
             blurred_image[..., channel] = convolve2d(blmimage[..., channel], custom_kernel, mode='same', boundary='fill', fillvalue=0)
         imgtmp = blurred_image
         alpha_mask = blurred_image[..., 3] > 0
         imgtmp[..., :3] = 255
         imgtmp[alpha_mask, 3] = np.clip((255 - blurred_image[alpha_mask, 3].astype(float))*bloom[0], 0, 255).astype(np.uint8)
-        large_array = imgtmp.copy()
+        large_array = deepcopy(imgtmp)
 
     if onlyAddon: return large_array.astype(np.uint8)
     image = imageInterp(image, large_array, 'alpha_compositing', interp1=1, interp2=1)
     return image.astype(np.uint8)
 
 
-def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor: Union[np.ndarray, list] = [0, 0, 0, 255],
+def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor: Union[list, np.ndarray, None] = None,
                  threshold: int = 200, outlineType: str = "circle") -> np.ndarray:
     """
     Adds an outline to an image.
@@ -715,9 +718,9 @@ def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor
     :param outlineColor: Color of the outline
     :param threshold: Transparency threshold to consider as a valid pixel to add outline
     :param outlineType: Type of outline (see above)
-    :param useCOutline: Whether to use an implementation in C to make it faster.
     :return: Outlined image
     """
+    if outlineColor is None: outlineColor = [0, 0, 0, 255]
     img = iio.imread(image) if isinstance(image, str) else image
 
     thickness += 2
@@ -743,7 +746,7 @@ def imageOutline(image: Union[str, np.ndarray], thickness: int = 5, outlineColor
     resize_img = np.zeros((new_h, new_w, 4), dtype=np.uint8)
     resize_img[6 * thickness:new_h - 6 * thickness, 6 * thickness:new_w - 6 * thickness, :] = img
 
-    pixel = resize_img.copy()
+    pixel = deepcopy(resize_img)
 
     threshold_mask = resize_img[:, :, 3] > threshold
 
@@ -975,8 +978,8 @@ def imageInterp(image1: Union[str, np.ndarray], image2: Union[str, np.ndarray], 
     else: w2, h2 = image2.shape[1], image2.shape[0]
     if w2 != w1 or h2 != h1: raise ValueError("Both images must be of the same size.")
     interpType = interpType.lower()
-    pixel1 = copy.deepcopy(img1).astype(float)
-    pixel2 = copy.deepcopy(img2).astype(float)
+    pixel1 = deepcopy(img1).astype(float)
+    pixel2 = deepcopy(img2).astype(float)
     if pixel1.shape[2] != 4: pixel1 = np.dstack((pixel1, np.full((h1, w1), 255, dtype=np.uint8)))
     if pixel2.shape[2] != 4: pixel2 = np.dstack((pixel2, np.full((h1, w1), 255, dtype=np.uint8)))
     if interpType == 'add':
@@ -986,7 +989,7 @@ def imageInterp(image1: Union[str, np.ndarray], image2: Union[str, np.ndarray], 
         v = interp1*pixel1*interp2*pixel2
         pixel = np.clip(v, 0, 255)
     elif interpType == 'alpha_compositing':
-        pixel = copy.deepcopy(img1)
+        pixel = deepcopy(img1)
         if pixel.shape[2] != 4: pixel = np.dstack((pixel, np.full((h1, w1), 255, dtype=np.uint8)))
         alpha_channel = interp2*pixel2[:, :, 3]
         v1 = interp1 * (255 - alpha_channel)
@@ -996,10 +999,36 @@ def imageInterp(image1: Union[str, np.ndarray], image2: Union[str, np.ndarray], 
     return pixel.astype(np.uint8)
 
 
+def unihanCharacters(unihanPath = r"./Unihan_IRGSources.txt"):
+    from collections import defaultdict
+
+    outdict = defaultdict(list)
+    with open(unihanPath) as f:
+        lines = f.readlines()
+        i = 0
+        for line in lines:
+            line = line.split("\t")
+            if len(line) == 3 and line[1] == "kTotalStrokes":
+                try:
+                    stroke_count = int(line[2])
+                except:
+                    continue
+                if stroke_count > 7 and any((i % 2 == 0, i % 3 == 0)) or 2825 < i < 2834:
+                    continue
+                character = chr(int(line[0].lstrip("U+").zfill(8), 16))
+                outdict[stroke_count].append(character)
+                i += 1
+
+    ordered_characters = ""
+    for stroke_count in sorted(outdict.keys()):
+        ordered_characters += ''.join(outdict[stroke_count])
+    return " " + ordered_characters
+
+
 def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "braille", customAscii: str = None,
                  contrast: float = 1, invert: bool = False, dither_type: Union[str, None] = None, smooth: bool = False,
                  accentuate: bool = False, thck: int = 1, replace_space: bool = True, space_strip: bool = False,
-                 threshold: tuple = (0, 255)) -> Union[tuple[str, np.ndarray]]:
+                 threshold: tuple = (0, 255), unihanCharacters = None) -> Union[tuple[str, np.ndarray]]:
     """
     Converts an image to text (ascii)
 
@@ -1080,6 +1109,7 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
             '11,10,00': '⠋', '11,10,01': '⠫', '11,10,10': '⠏', '11,10,11': '⠯', '11,11,00': '⠛', '11,11,01': '⠻',
             '11,11,10': '⠟', '11,11,11': '⠿'
         }
+
         densities = [
             r" .:-=+*#%@",
             r" ░▒▓█",
@@ -1087,10 +1117,11 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
         ]
 
         asciiString = asciiString.lower()
-        if asciiString in ["braille", "braille8"]: braille = 1
-        if asciiString in ["braille6"]: braille = 2
+        if asciiString in {"braille", "braille8"}: braille = 1
+        if asciiString in {"braille6"}: braille = 2
         elif asciiString == "squares": density = densities[1]
         elif asciiString == "simple": density = densities[0]
+        elif asciiString in {"unihan", "chinese", "asian"}: density = unihanCharacters
         else: density = densities[2]
     if replace_space:
         braille_dict["00,00,00,00"] = '⠐'
@@ -1102,7 +1133,7 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
     if braille == 1: size_tuple = (size, round(h*size/w))
     else: size_tuple = (size, round(h*size/w))
     img = imageFilter(imageFilter(resizeImage(img, size=size_tuple), "identity", contrast=contrast, ditherType=dither_type,
-                                  threshold=threshold), "greyscale", colors=2)
+                                  threshold=threshold), "greyscale", colors=16)
     if accentuate: img = imageKernel(img, "inverse_edge", thickness=thck, sharpness=1)
     if smooth: img = imageKernel(img, "box_blur", kernelSize=3)
     if invert: img = imageFilter(img, "inverse")
@@ -1156,7 +1187,7 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
     return ascii_str, img
 
 
-def profileGen(image: Union[str, np.ndarray], thickness: float = 1.0, color: Union[np.ndarray, list] = [255, 255, 255, 255],
+def profileGen(image: Union[str, np.ndarray], thickness: float = 1.0, color: Union[list, np.ndarray, None] = None,
                vignette: bool = True) -> np.ndarray:
     """
     Generates a profile picture with the given image, adding a colored circle around and an optional vignette
@@ -1167,6 +1198,7 @@ def profileGen(image: Union[str, np.ndarray], thickness: float = 1.0, color: Uni
     :param vignette: Set to True to add a black vignette
     :return: Modified image
     """
+    if color is None: color = [255, 255, 255, 255]
     if isinstance(image, str): image = iio.imread(image)
     h, w, _ = image.shape
     if h != w:
@@ -1197,8 +1229,8 @@ def profileGen(image: Union[str, np.ndarray], thickness: float = 1.0, color: Uni
     return filtered.astype(np.uint8)
 
 
-def remover(image: Union[str, np.ndarray], colorRm: Union[np.ndarray, list] = [255, 255, 255, 255],
-            colorRp: Union[np.ndarray, list] = [127, 127, 127, 255], threshold: int = 0,
+def remover(image: Union[str, np.ndarray], colorRm: Union[list, np.ndarray, None] = None,
+            colorRp: Union[list, np.ndarray, None] = None, threshold: int = 0,
             rmType: str = 'remove') -> np.ndarray:
     """
     Replaces all pixels of a given color or similar to another color or erases them
@@ -1210,6 +1242,8 @@ def remover(image: Union[str, np.ndarray], colorRm: Union[np.ndarray, list] = [2
     :param rmType: Whether to remove or replace the given color
     :return: Image with the removed/replaced color
     """
+    if colorRm is None: colorRm = [255, 255, 255, 255]
+    if colorRp is None: colorRp = [127, 127, 127, 255]
     img = iio.imread(image) if isinstance(image, str) else image
     h, w, hasAlpha = img.shape
     if hasAlpha != 4: img = np.dstack((img, np.full((h, w), 255, dtype=np.uint8)))
@@ -1249,11 +1283,12 @@ def magicWand(img: Union[str, np.ndarray], selectedPixel: tuple[int, int],
     return np.array(image2).astype(np.uint8)
 
 
-def paint(img: np.ndarray, selectedPixel: tuple, brushKernel: np.ndarray, color: list = [0, 0, 0, 255],
+def paint(img: np.ndarray, selectedPixel: tuple, brushKernel: np.ndarray, color: Union[list, np.ndarray, None] = None,
           paintMode: str = "alpha_compositing") -> np.ndarray:
     """
     Function not finished!
     """
+    if color is None: color = [0, 0, 0, 255]
     color = np.array(color)
     N = len(brushKernel[0])
     s0, s1 = selectedPixel

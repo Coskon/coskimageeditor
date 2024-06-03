@@ -18,6 +18,7 @@ from tkinter import filedialog, simpledialog, messagebox, ttk, colorchooser
 from tkinterdnd2 import TkinterDnD, DND_FILES
 from PIL import Image, ImageTk, ImageGrab
 from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
 
 VIDEO_SUPPORTED = "*.mp4;*.avi;*.mkv;*.mov;*.mpeg;*.webm"
 FILE_SUPPORTED = "*.gif;*.png;*.jpg;*.jpeg;*.bmp;*.tiff;*.jfif;*.tif;*.ppm;*.pgm;*.pnm;*.webp;*.ico;*.psd;*.cur"
@@ -286,7 +287,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.textboxes = [0, 0, 0, 0, 0]
         self.options_entries = []
         self.changed_palette = False
-        self.images_preview = images
+        self.images_preview = images.copy()
 
         self.pixelization = 1
         self.filter_type = "identity"
@@ -436,7 +437,6 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.bayer_strength_entry = tk.Scale(master, from_=1, to=50, orient="horizontal", showvalue=False,
                                   bg=self.bg_color, fg=self.text_color, activebackground=self.bg_color,
                                   troughcolor=self.button_color, highlightthickness=0, command=self.update_values)
-        self.greycol_entry = tk.Entry(master, textvariable=self.colors)
         self.bayer_size_entry.set(self.bayer_size)
         self.bayer_strength_entry.set(self.bayer_strength)
         self.bayer_size_label.grid(row=9, column=0, padx=5, pady=5)
@@ -489,7 +489,6 @@ class FilterWindow(tk.simpledialog.Dialog):
         elif self.filter_type == "No Filter":
             self.filter_type = "identity"
 
-        self.palette = self.palette_combobox.get().lower() if self.changed_palette else self.pre_palette
         self.one_palette = bool(self.use_one_palette.get())
         self.bayer_size = int(self.bayer_size_entry.get())
         self.bayer_strength = self.bayer_strength_entry.get()
@@ -499,14 +498,19 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.dither_type = self.dither_combobox.get() if self.dithering.get() else None
         tmp_col = self.dither_colors
         self.dither_colors = int(self.dither_col_entry.get()) if self.dithering.get() and self.dither_col_entry.get() != ""  else self.dither_colors
-        if tmp_col != self.dither_colors or not self.one_palette:
-            self.pre_palette = im.findPalette(np.array(self.images_preview[self.frame_num]), num_colors=self.dither_colors)
         self.colors = int(self.greycol_entry.get()) if self.greycol_entry.get() and self.greyscale else self.colors
         self.mirror = self.mirror_combobox.get() if self.mirroring.get() and self.mirroring.get() else None
+        if tmp_col != self.dither_colors or not self.one_palette:
+            if self.filter_type == "Greyscale":
+                self.pre_palette = (np.tile(np.arange(0, 255 + 255 / self.colors, 255 / self.colors), (4, 1)).T).astype(np.uint8)
+                self.pre_palette[:, 3] = 255
+            else:
+                self.pre_palette = im.findPalette(np.array(self.images_preview[self.frame_num]), num_colors=self.dither_colors)
+        self.palette = self.palette_combobox.get().lower() if self.changed_palette else self.pre_palette
 
         try:
             self.custom_filter = [float(i.get()) for i in self.textboxes] if self.textboxes else [1, 1, 1, 1, 0]
-            if any(self.custom_filter) in ['', None]: self.custom_filter = [1, 1, 1, 1, 0]
+            if any([val in ['', None] for val in self.custom_filter]): self.custom_filter = [1, 1, 1, 1, 0]
         except:
             None
 
@@ -613,7 +617,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
             self.button_color = "#EEEEEE"
             self.text_color = "black"
 
-        self.images = images
+        self.images = images.copy()
         self.size = 100
         self.ascii_type = "Braille"
         self.contrast = 1
@@ -628,6 +632,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
         self.curr_frame = 0
         self.threshold_lower = 0
         self.threshold_upper = 255
+        #self.unihan_chars = im.unihanCharacters()
 
         super().__init__(parent)
 
@@ -636,7 +641,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
         master.configure(bg=self.bg_color)
         self.resizable(False, False)
 
-        ascii_types = ["Braille", "Braille6", "Squares", "Simple", "Complex"]
+        ascii_types = ["Braille", "Braille6", "Squares", "Simple", "Complex"]#, "Unihan"]
         dither_types = ["No Dithering", "Floyd-Steinberg", "Atkinson", "Stucki"]
 
         # ASCII TYPE
@@ -801,7 +806,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
                                     contrast=self.contrast, invert=self.invert, dither_type=self.dither_type,
                                     smooth=self.smooth, accentuate=self.accentuate, thck=self.accentuate_thickness,
                                     replace_space=self.braille_space, space_strip=self.space_strip,
-                                    threshold=(self.threshold_lower, self.threshold_upper))
+                                    threshold=(self.threshold_lower, self.threshold_upper))#, unihanCharacters=self.unihan_chars)
         char_count = len(ascii_img), max([len(line) for line in ascii_img.splitlines()]), ascii_img.count("\n")
         self.txtbox.insert("1.0", ascii_img)
         fdict = {
@@ -1218,9 +1223,10 @@ class ImageEditorWindow:
             url = simpledialog.askstring("Load from URL", "Enter the URL of the image:")
             response = requests.get(url)
             if response.status_code == 200:
-                frames = response.content.decode('utf-8').split(';')
-                for i in range(len(frames)):
-                    frames[i] = Image.open(BytesIO(frames[i].encode('utf-8')))
+                #frames = response.content.decode('utf-8').split(';')
+                #for i in range(len(frames)):
+                #    frames[i] = Image.open(BytesIO(frames[i].encode('utf-8')))
+                frames = [Image.open(BytesIO(response.content))]
 
                 self.original_frames = self.frames = [frame for frame in frames]
                 self.original_delays = self.delays = [40] * len(frames)
@@ -1477,7 +1483,13 @@ class ImageEditorWindow:
     def supr(self):
         if self.using_wand:
             if messagebox.askyesno("Erase", "Erase selected region?"):
-                self.frames = [Image.fromarray(im.magicWand(np.array(frame.convert("RGBA")), (self.current_im_x, self.current_im_y), (0, 0, 0, 0), self.wnd_tolerance)) for frame in self.original_frames]
+                def threads_wand(frame):
+                    return Image.fromarray(im.magicWand(np.array(frame.convert("RGBA")), (self.current_im_x, self.current_im_y), (0, 0, 0, 0), self.wnd_tolerance))
+
+                with ThreadPoolExecutor(max_workers=6) as executor:
+                    self.frames = list(executor.map(threads_wand, self.original_frames))
+
+                #self.frames = [Image.fromarray(im.magicWand(np.array(frame.convert("RGBA")), (self.current_im_x, self.current_im_y), (0, 0, 0, 0), self.wnd_tolerance)) for frame in self.original_frames]
                 self.original_frames = self.frames.copy()
 
                 folder_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
@@ -1510,7 +1522,12 @@ class ImageEditorWindow:
         color = np.array(self.frames[0].convert("RGBA"))[y, x]
         color[3] = 60
         if 0 <= x <= fx and 0 <= y <= fy:
-            self.frames = [Image.fromarray(im.magicWand(np.array(frame.convert("RGBA")), (x, y), tuple(color), self.wnd_tolerance)) for frame in self.original_frames]
+            def threads_wand(frame):
+                return Image.fromarray(im.magicWand(np.array(frame.convert("RGBA")), (x, y), tuple(color), self.wnd_tolerance))
+
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                self.frames = list(executor.map(threads_wand, self.original_frames))
+            #self.frames = [Image.fromarray(im.magicWand(np.array(frame.convert("RGBA")), (x, y), tuple(color), self.wnd_tolerance)) for frame in self.original_frames]
             self.current_im_x, self.current_im_y = x, y
         self.update_frame()
 
@@ -1683,15 +1700,15 @@ class ImageEditorWindow:
         self.change_outline(self.outline_slider.get())
 
     def change_outline(self, value, thr=50):
+        if not self.file_path: return None
         value = self.convert_back(float(value))
         if value == 0:
             self.frames = self.original_frames.copy()
             return None
         self.enable_pan = False
-        if not self.file_path: return None
-        if value != 0: value = 2*int(value)-1
-        self.frames = [Image.fromarray(im.imageOutline(np.array(frame.convert("RGBA")), thickness=value, threshold=int(thr), outlineColor=self.outline_color, outlineType=self.outline_type.get().lower()))
-                       for frame in self.original_frames]
+        value = 2*int(value)-1
+
+        self.frames = [Image.fromarray(im.imageOutline(np.array(frame.convert("RGBA")), thickness=value, threshold=int(thr), outlineColor=self.outline_color, outlineType=self.outline_type.get().lower())) for frame in self.original_frames]
         self.update_frame()
 
     def new_image(self):
@@ -1785,8 +1802,14 @@ class ImageEditorWindow:
             "ditherType": fdittype, "ditherColors": fditcol, "customPalette": fpalette,
         }
         ftype = ftype.lower()
+
+        def threads_filter(frame):
+            return Image.fromarray(im.imageFilter(np.array(frame.convert("RGBA")), ftype, **param_dict))
+
         try:
-            self.frames = [Image.fromarray(im.imageFilter(np.array(frame.convert("RGBA")), ftype, **param_dict)) for frame in self.original_frames]
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                self.frames = list(executor.map(threads_filter, self.original_frames))
+            #self.frames = [Image.fromarray(im.imageFilter(np.array(frame.convert("RGBA")), ftype, **param_dict)) for frame in self.original_frames]
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
             traceback.print_exc()
@@ -2463,12 +2486,12 @@ class ImageEditorWindow:
             self.file_path = self.action_list[self.current_action][1]
             _, self.delays = self.load_frames()
             self.file_path = tmp
-        self.update_frame()
         self.current_frame += 1
         if self.current_frame == len(self.frames):
             self.current_frame = 0
         delay = int(self.delays[self.current_frame])
         self.animation_id = self.root.after(delay, self.animate)
+        self.update_frame()
 
     def on_mousewheel(self, event):
         if not self.in_other_window and self.file_path:
