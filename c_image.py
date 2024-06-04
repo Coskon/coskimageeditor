@@ -8,7 +8,7 @@ def CDither(image: Union[str, np.ndarray], palette: np.ndarray, type: str = "",
             bayerSize: int = 2, bayerStrength: float = 1.0):
     if bayerSize > 5: return
     bayerSize = 2**bayerSize
-    if type in {"ordered", "bayer", "halftone"}: type = "halftone"
+    if type in {"ordered", "bayer", "halftone"}: type = "bayer"
     image = Image.open(image) if isinstance(image, str) else Image.fromarray(image)
     plt_size, _ = palette.shape
     cut_palette = palette[:, :3]

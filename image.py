@@ -429,10 +429,9 @@ def imageFilter(image: Union[str, np.ndarray], filter_type: str, customFilter: U
         I is used to invert the colors of the image, either 0 or 1
     :param luminance: Change the luminance/brightness of the image
     :param colors: Quantity of greyscale colors to use with the greyscale filter or greyscale dithering
-    :param ditherType: Type of dithering: halftone, floyd-steinberg, hor-floyd-steinberg, fast-floyd-steinberg.
-        Halftone only works with greyscale images (use greyscale filter)
-    :param ditherColors: Amount of colors of the palette to be extracted from the image for dithering (Floyd-Steinberg)
-    :param useCDither: Whether to use or not a C implementation of dithering, being much faster.
+    :param ditherType: Type of dithering: bayer, floyd-steinberg, atkinson, stucki.
+    :param ditherColors: Amount of colors of the palette to be extracted from the image for dithering.
+    :param useCDither: Whether to use or not a C implementation of dithering, much faster.
     :param paletteAlgorithm: Algorithm to search for the best colors to grab based on ditherColors. Defaults to KMeans,
         anything else will use "color popularity" method
     :param customPalette: Specify a custom palette for dithering. You can also use pre-existing palettes from the
@@ -442,7 +441,7 @@ def imageFilter(image: Union[str, np.ndarray], filter_type: str, customFilter: U
     :param pixelSize: Defaults to 1. If changed it pixelates the image, 1 is the best resolution, then 2, 3, ...
     :param resizeMethod: When changing the pixelSize, you can change how it resizes: nearest-neighbor, bilinear
     :param mirror: Mirrors the image horizontally (h, hor, horizontal) or vertically (v, ver, vert, vertical)
-    :param bayer: Tuple containing the size of the bayer matrix and strength of the effect. Used with halftone dithering.
+    :param bayer: Tuple containing the size of the bayer matrix and strength of the effect. Used with ordered dithering.
     :param:
     :return: Modified image as a ndarray
     """
@@ -528,7 +527,7 @@ def imageFilter(image: Union[str, np.ndarray], filter_type: str, customFilter: U
             except:
                 pass
             pixel = CDither(pixel, palette=np.array(customPalette), type=ditherType, bayerSize=bayer[0], bayerStrength=bayer[1])
-        elif ditherType == 'halftone' and grey:
+        elif ditherType == 'bayer' and grey:
             if byw:
                 colorDiv = np.arange(0, 255 + 255 / colors, 255 / colors).tolist()
                 intervals = [[int(colorDiv[i]), int(colorDiv[i + 1])] for i in range(colors)]
@@ -566,7 +565,7 @@ def imageFilter(image: Union[str, np.ndarray], filter_type: str, customFilter: U
                     pixel[i+1][j] = np.array([bottomleft, bottomleft, bottomleft, pixel[i+1][j][3]])
                     pixel[i][j+1] = np.array([topright, topright, topright, pixel[i][j+1][3]])
                     pixel[i+1][j+1] = np.array([bottomright, bottomright, bottomright, pixel[i+1][j+1][3]])
-        elif ditherType == 'halftone' and not grey: raise NameError('Halftone dithering only available for greyscale images.')
+        elif ditherType == 'bayer' and not grey: raise NameError('Bayer dithering only available for greyscale images.')
         else:
             if grey:
                 cols = np.arange(0, 255 + 255 / (ditherColors - 1), 255 / (ditherColors - 1))

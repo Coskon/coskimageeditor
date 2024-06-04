@@ -305,7 +305,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.one_palette = True
         self.pre_palette = None
         self.frame_num = 0
-        self.bayer_strength = 16
+        self.bayer_strength = 50
         self.bayer_size = 2
 
         super().__init__(parent)
@@ -324,7 +324,7 @@ class FilterWindow(tk.simpledialog.Dialog):
             else:
                 filter_types[i] = filter_types[i].capitalize()
         filter_types.remove("Identity_tuple")
-        dither_types = ["Floyd-Steinberg", "Atkinson", "Stucki", "Halftone"]
+        dither_types = ["Floyd-Steinberg", "Atkinson", "Stucki", "Bayer"]
         mirror_types = ["Vertical", "Horizontal"]
 
         # FILTER TYPE
@@ -434,7 +434,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         self.bayer_size_entry = tk.Scale(master, from_=1, to=5, orient="horizontal", showvalue=False,
                                   bg=self.bg_color, fg=self.text_color, activebackground=self.bg_color,
                                   troughcolor=self.button_color, highlightthickness=0, command=self.update_values)
-        self.bayer_strength_entry = tk.Scale(master, from_=1, to=50, orient="horizontal", showvalue=False,
+        self.bayer_strength_entry = tk.Scale(master, from_=0, to=200, orient="horizontal", showvalue=False,
                                   bg=self.bg_color, fg=self.text_color, activebackground=self.bg_color,
                                   troughcolor=self.button_color, highlightthickness=0, command=self.update_values)
         self.bayer_size_entry.set(self.bayer_size)
@@ -491,7 +491,7 @@ class FilterWindow(tk.simpledialog.Dialog):
 
         self.one_palette = bool(self.use_one_palette.get())
         self.bayer_size = int(self.bayer_size_entry.get())
-        self.bayer_strength = self.bayer_strength_entry.get()
+        self.bayer_strength = self.bayer_strength_entry.get()/100
         self.bayer_strength_label.config(text=f"Bayer Strength ({self.bayer_strength:.2f})")
         self.bayer_size_label.config(text=f"Bayer Matrix Size ({self.bayer_size})")
 
@@ -1790,6 +1790,7 @@ class ImageEditorWindow:
             else: fpalette = None
             fmirror, fgreycol = dialog.mirror, dialog.colors
             fdittype, fditcol = dialog.dither_type, int(4 if dialog.dither_colors == "" else dialog.dither_colors)
+            fbyersize, fbyerstrg = dialog.bayer_size, dialog.bayer_strength
             fsat, fcon, flum = dialog.saturation, dialog.contrast, dialog.luminance
         else:
             ftype = args[0]
@@ -1800,6 +1801,7 @@ class ImageEditorWindow:
             "pixelSize": fpix, "saturation": fsat, "contrast": fcon, "luminance": flum,
             "customFilter": fcustom, "mirror": fmirror, "colors": fgreycol,
             "ditherType": fdittype, "ditherColors": fditcol, "customPalette": fpalette,
+            "bayer": (fbyersize, fbyerstrg)
         }
         ftype = ftype.lower()
 
@@ -1833,7 +1835,7 @@ class ImageEditorWindow:
         text += f'Contrast: {fcon}'*int(fcon != 1) + ('|'*int(fcon != 1) + f'Saturation: {fsat}')*int(fsat != 1) + ('|'*int(fcon != 1 or fsat != 1) + f'Luminance: {flum}')*int(flum != 1)+'\n'
         text += f'Pixelization: {fpix}\n' if fpix > 1 else ''
         text += f'Palette: {fpalette}\n' if isinstance(fpalette, str) else ''
-        text += '' if not fdittype else f'Dithering: {fdittype.capitalize()}'+int(ftype == "change_palette")*f', {len(im.PALETTES[fpalette if isinstance(fpalette, str) else "red"])} colors\n'+int(ftype != "change_palette" and fdittype != "halftone")*f', {fditcol} colors\n'
+        text += '' if not fdittype else f'Dithering: {fdittype.capitalize()}'+int(ftype == "change_palette")*f', {len(im.PALETTES[fpalette if isinstance(fpalette, str) else "red"])} colors\n'+int(ftype != "change_palette" and fdittype != "bayer")*f', {fditcol} colors\n'
         text += '' if not fmirror else f'Mirror: {fmirror.capitalize()}\n'
         self.show_action_label(text)
 
