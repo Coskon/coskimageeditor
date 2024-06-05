@@ -27,7 +27,6 @@ def CDither(image: Union[str, np.ndarray], palette: np.ndarray, type: str = "",
     c_palette = ((c_uint8 * 3) * plt_size)(*[
         (c_uint8 * 3)(*rgba) for rgba in cut_palette
     ])
-    print(bayerStrength)
     byte_out = dither_code.dither(byte_data, w, h, 4, c_palette, plt_size, bayerSize, bayerStrength)
     return np.array(Image.frombytes('RGBA', (w,h), cast(byte_out, POINTER(c_char_p * (w * h * 4))).contents))
 
