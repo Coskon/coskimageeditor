@@ -618,17 +618,17 @@ class AsciiWindow(tk.simpledialog.Dialog):
             self.text_color = "black"
 
         self.images = images.copy()
-        self.size = 100
+        self.size = 200
         self.ascii_type = "Braille"
         self.contrast = 1
-        self.invert = True
-        self.dither_type = "No Dithering"
+        self.invert = False
+        self.dither_type = "Atkinson"
         self.smooth = False
         self.accentuate = False
         self.accentuate_thickness = 1
         self.font_size = 5
         self.braille_space = False
-        self.space_strip = True
+        self.space_strip = False
         self.curr_frame = 0
         self.threshold_lower = 0
         self.threshold_upper = 255
@@ -642,13 +642,14 @@ class AsciiWindow(tk.simpledialog.Dialog):
         self.resizable(False, False)
 
         ascii_types = ["Braille", "Braille6", "Squares", "Simple", "Complex"]#, "Unihan"]
-        dither_types = ["No Dithering", "Floyd-Steinberg", "Atkinson", "Stucki"]
+        dither_types = ["No Dithering", "Floyd-Steinberg", "Atkinson", "Stucki",
+                        "Bayer_2X2", "Bayer_4X4", "Bayer_8X8", "Bayer_16X16", "Bayer_32X32"]
 
         # ASCII TYPE
         self.type_label = tk.Label(master, text="Type:", bg=self.bg_color, fg=self.text_color)
         self.type_combobox = ttk.Combobox(master, textvariable=self.ascii_type,
                                           values=ascii_types)
-        self.type_combobox.set("Braille")
+        self.type_combobox.set(self.ascii_type)
         self.type_label.grid(row=0, column=0, padx=5, pady=5)
         self.type_combobox.grid(row=0, column=1, padx=5, pady=5)
         self.type_combobox.bind("<<ComboboxSelected>>", lambda event: self.update_values())
@@ -687,7 +688,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
         self.dither_label = tk.Label(master, text="Dithering:", bg=self.bg_color, fg=self.text_color)
         self.dithering_combobox = ttk.Combobox(master, textvariable=self.dither_type,
                                           values=dither_types)
-        self.dithering_combobox.set("No Dithering")
+        self.dithering_combobox.set(self.dither_type)
         self.dither_label.grid(row=3, column=0, padx=5, pady=5)
         self.dithering_combobox.grid(row=3, column=1, padx=5, pady=5)
         self.dithering_combobox.bind("<<ComboboxSelected>>", lambda event: self.update_values())

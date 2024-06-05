@@ -408,7 +408,7 @@ def imageFilter(image: Union[str, np.ndarray], filter_type: str, customFilter: U
                 saturation: float = 1.0, contrast: float = 1.0, pixelSize: int = 1, resizeMethod: str = 'nearest-neighbor',
                 threshold: tuple[int, int] = None, customPalette: Union[np.ndarray, list, None] = None,
                 paletteAlgorithm: str = 'kmeans', mirror: str = None, useCDither: bool = True,
-                bayer: tuple[int, float] = (2, 16.0)) -> np.ndarray:
+                bayer: tuple[int, float] = (2, 0.5)) -> np.ndarray:
     """
     Modify an image by using filters, dithering, etc.
 
@@ -1052,7 +1052,7 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
     density = customAscii
     if not customAscii:
         braille_dict = {
-            '00,00,00,00': '⠀', '00,00,00,01': '⢀', '00,00,00,10': '⡀', '00,00,00,11': '⣀', '00,00,01,00': '⠠', '00,00,01,01': '⢠', '00,00,01,10': '⡠',
+            '00,00,00,00': '\u2800', '00,00,00,01': '⢀', '00,00,00,10': '⡀', '00,00,00,11': '⣀', '00,00,01,00': '⠠', '00,00,01,01': '⢠', '00,00,01,10': '⡠',
             '00,00,01,11': '⣠', '00,00,10,00': '⠄', '00,00,10,01': '⢄', '00,00,10,10': '⡄', '00,00,10,11': '⣄', '00,00,11,00': '⠤', '00,00,11,01': '⢤',
             '00,00,11,10': '⡤', '00,00,11,11': '⣤', '00,01,00,00': '⠐', '00,01,00,01': '⢐', '00,01,00,10': '⡐', '00,01,00,11': '⣐', '00,01,01,00': '⠰',
             '00,01,01,01': '⢰', '00,01,01,10': '⡰', '00,01,01,11': '⣰', '00,01,10,00': '⠔', '00,01,10,01': '⢔', '00,01,10,10': '⡔', '00,01,10,11': '⣔',
@@ -1091,7 +1091,7 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
             '11,11,11,00': '⠿', '11,11,11,01': '⢿', '11,11,11,10': '⡿', '11,11,11,11': '⣿'
         }
         braille6_dict = {
-            '00,00,00': '⠀', '00,00,01': '⠠', '00,00,10': '⠄', '00,00,11': '⠤',
+            '00,00,00': '\u2800', '00,00,01': '⠠', '00,00,10': '⠄', '00,00,11': '⠤',
             '00,01,00': '⠐', '00,01,01': '⠰', '00,01,10': '⠔', '00,01,11': '⠴',
             '00,10,00': '⠂', '00,10,01': '⠢', '00,10,10': '⠆', '00,10,11': '⠦', '00,11,00': '⠒', '00,11,01': '⠲',
             '00,11,10': '⠖', '00,11,11': '⠶',
@@ -1111,8 +1111,8 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
 
         densities = [
             r" .:-=+*#%@",
-            r" ░▒▓█",
-            r" .'` ^ ,:;Il!i><~+_-?][}{1)(|\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"
+            "\u2800"+r"░▒▓█",
+            r" .'` ^ ,:;Il!i><~+_-?][}{1)(|\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
         ]
 
         asciiString = asciiString.lower()
@@ -1121,6 +1121,7 @@ def imageToAscii(image: Union[str, np.ndarray], size: int, asciiString: str = "b
         elif asciiString == "squares": density = densities[1]
         elif asciiString == "simple": density = densities[0]
         elif asciiString in {"unihan", "chinese", "asian"}: density = unihanCharacters
+        elif asciiString == "1": density = densities[3]
         else: density = densities[2]
     if replace_space:
         braille_dict["00,00,00,00"] = '⠐'

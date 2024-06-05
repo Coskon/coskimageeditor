@@ -5,10 +5,14 @@ import numpy as np
 
 
 def CDither(image: Union[str, np.ndarray], palette: np.ndarray, type: str = "",
-            bayerSize: int = 2, bayerStrength: float = 1.0):
-    if bayerSize > 5: return
-    bayerSize = 2**bayerSize
+            bayerSize: int = 2, bayerStrength: float = 0.5):
     if type in {"ordered", "bayer", "halftone"}: type = "bayer"
+    elif type == "bayer_2x2": type, bayerSize = "bayer", 1
+    elif type == "bayer_4x4": type, bayerSize = "bayer", 2
+    elif type == "bayer_8x8": type, bayerSize = "bayer", 3
+    elif type == "bayer_16x16": type, bayerSize = "bayer", 4
+    elif type == "bayer_32x32": type, bayerSize = "bayer", 5
+    bayerSize = 2 ** min(max(bayerSize, 1), 5)
     image = Image.open(image) if isinstance(image, str) else Image.fromarray(image)
     plt_size, _ = palette.shape
     cut_palette = palette[:, :3]
@@ -23,6 +27,7 @@ def CDither(image: Union[str, np.ndarray], palette: np.ndarray, type: str = "",
     c_palette = ((c_uint8 * 3) * plt_size)(*[
         (c_uint8 * 3)(*rgba) for rgba in cut_palette
     ])
+    print(bayerStrength)
     byte_out = dither_code.dither(byte_data, w, h, 4, c_palette, plt_size, bayerSize, bayerStrength)
     return np.array(Image.frombytes('RGBA', (w,h), cast(byte_out, POINTER(c_char_p * (w * h * 4))).contents))
 
