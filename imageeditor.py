@@ -1,3 +1,6 @@
+from timeit import default_timer
+start = default_timer()
+
 import copy
 import io
 import time
@@ -20,6 +23,9 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 from PIL import Image, ImageTk, ImageGrab
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
+
+stop = default_timer()
+print(f"Import time: {round(abs(stop-start), 5)}s")
 
 VIDEO_SUPPORTED = "*.mp4;*.avi;*.mkv;*.mov;*.mpeg;*.webm"
 FILE_SUPPORTED = "*.gif;*.png;*.jpg;*.jpeg;*.bmp;*.tiff;*.jfif;*.tif;*.ppm;*.pgm;*.pnm;*.webp;*.ico;*.psd;*.cur"
@@ -45,6 +51,10 @@ USAGE_LIST = [
     '  // Show FPS', ', --set_limit (optional)  // Go back to the previous/next actions or change the limit',
     ' --speed --type  // Set speed (type: absolute, relative)'
 ]
+try:
+    EXE_DIR = os.path.dirname(sys.argv[0])
+except:
+    EXE_DIR = ''
 
 
 def convert_to_type(s):
@@ -920,9 +930,9 @@ class ImageEditorWindow:
         self.outline_threshold_select = None
         self.outline_slider = None
         self.color_picked = [(255, 255, 255), (255, 255, 255)]
-        self.dnd_image = ImageTk.PhotoImage(Image.open(r'gui_images/dnd2.png').resize((150, 150)))
-        self.colpickimg = ImageTk.PhotoImage(Image.open(r"gui_images/color_picker.png").resize((60, 60)))
-        self.wandimg = ImageTk.PhotoImage(Image.open(r"gui_images/magic_wand.png").resize((60, 60)))
+        self.dnd_image = ImageTk.PhotoImage(Image.open(os.path.join(EXE_DIR, "gui_images", "dnd2.png")).resize((150, 150)))
+        self.colpickimg = ImageTk.PhotoImage(Image.open(os.path.join(EXE_DIR, "gui_images", "color_picker.png")).resize((60, 60)))
+        self.wandimg = ImageTk.PhotoImage(Image.open(os.path.join(EXE_DIR, "gui_images", "magic_wand.png")).resize((60, 60)))
         self.create_widgets()
 
         root.bind("<Button-1>", self.start_pan)
@@ -1586,7 +1596,7 @@ class ImageEditorWindow:
         if self.painting:
             self.can_pan = False
             self.keep_paint = True
-            self.root.config(cursor="@gui_images/magicwndd.cur")
+            self.root.config(cursor=os.path.join(EXE_DIR, "@gui_images", "magicwndd.cur"))
             self.root.bind("<ButtonPress-1>", self.paint)
         else:
             self.can_pan = True
@@ -1601,7 +1611,7 @@ class ImageEditorWindow:
         self.pressed_escape = p
         if self.picking_color:
             self.can_pan = False
-            self.root.config(cursor="@gui_images/eyedropper.cur")
+            self.root.config(cursor=os.path.join(EXE_DIR, "@gui_images", "eyedropper.cur"))
             self.root.bind("<Button-1>", self.pick_color)
         else:
             self.can_pan = True
@@ -1625,7 +1635,7 @@ class ImageEditorWindow:
         self.pressed_escape = p
         if self.using_wand:
             self.can_pan = False
-            self.root.config(cursor="@gui_images/magicwndd.cur")
+            self.root.config(cursor=os.path.join(EXE_DIR, "@gui_images", "magicwndd.cur"))
             self.root.bind("<Button-1>", self.pick_wand)
         else:
             self.can_pan = True
@@ -2846,10 +2856,10 @@ class ImageEditorWindow:
 
 
 if __name__ == "__main__":
-    if not os.path.exists("PARAMETERS.txt"):
-        with open('PARAMETERS.txt', 'w') as f:
+    if not os.path.exists(os.path.join(EXE_DIR, "PARAMETERS.txt")):
+        with open(os.path.join(EXE_DIR, "PARAMETERS.txt"), 'w') as f:
             f.write("fullscreen = False\ntheme = 'dark'\nopen_console = False\ntransparentbg = True\nunit = 'px'\nDPI = 96\naction_size = 32\n")
-    with open("PARAMETERS.txt", 'r') as f:
+    with open(os.path.join(EXE_DIR, "PARAMETERS.txt"), 'r') as f:
         lines = f.readlines()
     parameters = {}
     for line in lines:
