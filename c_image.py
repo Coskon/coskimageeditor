@@ -2,6 +2,13 @@ from ctypes import *
 from PIL import Image
 from typing import Union
 import numpy as np
+import sys
+import os
+
+try:
+    EXE_DIR = os.path.dirname(sys.argv[0])
+except:
+    EXE_DIR = ''
 
 
 def CDither(image: Union[str, np.ndarray], palette: np.ndarray, type: str = "",
@@ -16,7 +23,7 @@ def CDither(image: Union[str, np.ndarray], palette: np.ndarray, type: str = "",
     image = Image.open(image) if isinstance(image, str) else Image.fromarray(image)
     plt_size, _ = palette.shape
     cut_palette = palette[:, :3]
-    dither_code = CDLL(f'dll/{type}.dll')
+    dither_code = CDLL(os.path.join(EXE_DIR, 'dll', f'{type}.dll'))
     dither_code.dither.argtypes = [c_char_p, c_int, c_int, c_int, ((c_uint8 * 3) * plt_size), c_int, c_int, c_float]
     dither_code.dither.restype = POINTER(c_char_p)
     w, h = image.size
@@ -36,7 +43,7 @@ def COutline(image: Union[str, np.ndarray], thickness: int = 15, outlineColor: U
     try: outlineColor.tolist()
     except: pass
     image = Image.open(image) if isinstance(image, str) else Image.fromarray(image)
-    outline_code = CDLL(f'dll/outline.dll')
+    outline_code = CDLL(os.path.join(EXE_DIR, 'dll', 'outline.dll'))
     outline_code.dither.argtypes = [c_char_p, c_int, c_int, c_int, c_uint8, (c_int16 * 4), c_int, c_char]
     outline_code.dither.restype = POINTER(c_char_p)
     w, h = image.size
