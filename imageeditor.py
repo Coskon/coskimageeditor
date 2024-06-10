@@ -12,6 +12,7 @@ import imageio as iio
 import requests
 import pyautogui
 import win32clipboard
+import sys
 from io import BytesIO
 from psd_tools import PSDImage
 from tkinter import filedialog, simpledialog, messagebox, ttk, colorchooser
@@ -986,6 +987,9 @@ class ImageEditorWindow:
         self.fps = False
         self.fps_label = None
         self.show_fps()
+        if len(sys.argv) > 1:
+            for path in sys.argv[1:]:
+                self.change_image(path)
 
     def change_pan(self, event=None, val=True):
         self.can_pan = val
