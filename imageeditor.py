@@ -1,31 +1,34 @@
 from timeit import default_timer
-start = default_timer()
 
-import copy
-import io
-import time
+def time_module(name):
+    start = default_timer()
+    globals()[name] = __import__(name)
+    stop = default_timer()
+    return abs(stop-start)
+
+total = 0
+for module_name in ["image", "ast", "copy", "io", "os", "re", "sys", "time", "tkinter", "traceback", "concurrent", "threading",
+                    "PIL", "numpy", "pyautogui", "requests", "win32clipboard", "imageio", "psd_tools", "tkinterdnd2"]:
+    time_taken = time_module(module_name)
+    if time_taken < 1e-3: continue
+    print(f"Import time of '{module_name}': {time_taken:.9f}s")
+    total += time_taken
+    __import__(module_name)
+print(f"Total import time: {total}s")
+
 import tkinter as tk
-import image as im
-import numpy as np
-import ast
-import os
-import traceback
-import re
-import imageio as iio
-import requests
-import pyautogui
-import win32clipboard
-import sys
-from io import BytesIO
-from psd_tools import PSDImage
-from tkinter import filedialog, simpledialog, messagebox, ttk, colorchooser
-from tkinterdnd2 import TkinterDnD, DND_FILES
-from PIL import Image, ImageTk, ImageGrab
-from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
+from threading import Thread
+from tkinter import simpledialog, colorchooser, filedialog, messagebox
 
-stop = default_timer()
-print(f"Import time: {round(abs(stop-start), 5)}s")
+import numpy as np
+from imageio import get_writer, get_reader
+from PIL import Image, ImageGrab, ImageTk
+from psd_tools import PSDImage
+from tkinterdnd2 import DND_FILES, TkinterDnD
+
+import image as im
 
 VIDEO_SUPPORTED = "*.mp4;*.avi;*.mkv;*.mov;*.mpeg;*.webm"
 FILE_SUPPORTED = "*.gif;*.png;*.jpg;*.jpeg;*.bmp;*.tiff;*.jfif;*.tif;*.ppm;*.pgm;*.pnm;*.webp;*.ico;*.psd;*.cur"
@@ -142,7 +145,7 @@ def ImageEditor(fullscreen=False, theme="dark", open_console=False, transparentb
     root.mainloop()
 
 
-class ResizeWindow(tk.simpledialog.Dialog):
+class ResizeWindow(simpledialog.Dialog):
     def __init__(self, parent, orig_size, theme):
         self.orig_size = orig_size
         self.scale = 1
@@ -186,7 +189,7 @@ class ResizeWindow(tk.simpledialog.Dialog):
         self.aspect_ratio_checkbox.grid(row=2, column=0, columnspan=2, pady=5)
 
         self.method_label = tk.Label(master, text="Resizing method:", bg=self.bg_color, fg=self.text_color)
-        self.method_combobox = ttk.Combobox(master, textvariable=self.resize_method,
+        self.method_combobox = tk.ttk.Combobox(master, textvariable=self.resize_method,
                                             values=["Nearest", "Bilinear", "Bicubic"])
         self.method_label.grid(row=3, column=0, padx=5, pady=5)
         self.method_combobox.grid(row=3, column=1, padx=5, pady=5)
@@ -221,7 +224,7 @@ class ResizeWindow(tk.simpledialog.Dialog):
         self.resize_method = self.resize_method.get()
 
 
-class NoiseWindow(tk.simpledialog.Dialog):
+class NoiseWindow(simpledialog.Dialog):
     def __init__(self, parent, size, theme):
         if theme == "dark":
             self.bg_color = "#444444"
@@ -267,7 +270,7 @@ class NoiseWindow(tk.simpledialog.Dialog):
         self.invert_checkbox.grid(row=2, column=0, columnspan=2, pady=5)
 
         self.type_label = tk.Label(master, text="Noise Type:", bg=self.bg_color, fg=self.text_color)
-        self.type_combobox = ttk.Combobox(master, textvariable=self.noise_type_stringvar,
+        self.type_combobox = tk.ttk.Combobox(master, textvariable=self.noise_type_stringvar,
                                             values=["Random", "ColorRandom", "Perlin", "Rain", "Circles", "Serpent"])
         self.grid = self.type_label.grid(row=3, column=0, padx=5, pady=5)
         self.type_combobox.grid(row=3, column=1, padx=5, pady=5)
@@ -284,7 +287,7 @@ class NoiseWindow(tk.simpledialog.Dialog):
         self.invert_check = self.invert_check.get()
 
 
-class FilterWindow(tk.simpledialog.Dialog):
+class FilterWindow(simpledialog.Dialog):
     def __init__(self, parent, theme, images):
         if theme == "dark":
             self.bg_color = "#444444"
@@ -340,7 +343,7 @@ class FilterWindow(tk.simpledialog.Dialog):
 
         # FILTER TYPE
         self.type_label = tk.Label(master, text="Filter Type:", bg=self.bg_color, fg=self.text_color)
-        self.type_combobox = ttk.Combobox(master, textvariable=self.filter_type,
+        self.type_combobox = tk.ttk.Combobox(master, textvariable=self.filter_type,
                                           values=filter_types)
         self.type_combobox.set("No Filter")
         self.grid = self.type_label.grid(row=0, column=0, padx=5, pady=5)
@@ -404,7 +407,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         )
         self.dithering_checkbox.grid(row=6, column=0, padx=5, pady=5, sticky="w")
         self.dither_label = tk.Label(master, text="Dither Type/N° Colors:", bg=self.bg_color, fg=self.text_color)
-        self.dither_combobox = ttk.Combobox(master, textvariable=self.dither_type, values=dither_types)
+        self.dither_combobox = tk.ttk.Combobox(master, textvariable=self.dither_type, values=dither_types)
         self.dither_combobox.set("Floyd-Steinberg")
         self.dither_combobox.bind("<<ComboboxSelected>>", self.update_values)
         self.dither_col_entry = tk.Entry(master, textvariable=self.dither_colors, width=10)
@@ -422,7 +425,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         )
         self.mirroring_checkbox.grid(row=7, column=0, padx=5, pady=5, sticky="w")
         self.mirror_label = tk.Label(master, text="Mirror Type:", bg=self.bg_color, fg=self.text_color)
-        self.mirror_combobox = ttk.Combobox(master, textvariable=self.mirror, values=mirror_types)
+        self.mirror_combobox = tk.ttk.Combobox(master, textvariable=self.mirror, values=mirror_types)
         self.mirror_combobox.set("Vertical")
         self.mirror_label.grid(row=7, column=1, padx=5, pady=5)
         self.mirror_combobox.grid(row=7, column=2, padx=5, pady=5)
@@ -559,7 +562,7 @@ class FilterWindow(tk.simpledialog.Dialog):
             palettes = [i.capitalize() for i in palettes]
             self.palette_label = tk.Label(self.palette_frame, text="Palette:", bg=self.bg_color, fg=self.text_color)
             self.palette_label.pack(side=tk.LEFT, padx=5)
-            self.palette_combobox = ttk.Combobox(self.palette_frame, textvariable=self.palette, values=palettes)
+            self.palette_combobox = tk.ttk.Combobox(self.palette_frame, textvariable=self.palette, values=palettes)
             self.palette_combobox.set(self.palette_selected)
             self.palette_combobox.bind("<<ComboboxSelected>>", self.update_values)
             self.palette_combobox.pack()
@@ -617,7 +620,7 @@ class FilterWindow(tk.simpledialog.Dialog):
         except: return
 
 
-class AsciiWindow(tk.simpledialog.Dialog):
+class AsciiWindow(simpledialog.Dialog):
     def __init__(self, parent, theme, images):
         if theme == "dark":
             self.bg_color = "#444444"
@@ -658,7 +661,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
 
         # ASCII TYPE
         self.type_label = tk.Label(master, text="Type:", bg=self.bg_color, fg=self.text_color)
-        self.type_combobox = ttk.Combobox(master, textvariable=self.ascii_type,
+        self.type_combobox = tk.ttk.Combobox(master, textvariable=self.ascii_type,
                                           values=ascii_types)
         self.type_combobox.set(self.ascii_type)
         self.type_label.grid(row=0, column=0, padx=5, pady=5)
@@ -697,7 +700,7 @@ class AsciiWindow(tk.simpledialog.Dialog):
 
         # DITHERING
         self.dither_label = tk.Label(master, text="Dithering:", bg=self.bg_color, fg=self.text_color)
-        self.dithering_combobox = ttk.Combobox(master, textvariable=self.dither_type,
+        self.dithering_combobox = tk.ttk.Combobox(master, textvariable=self.dither_type,
                                           values=dither_types)
         self.dithering_combobox.set(self.dither_type)
         self.dither_label.grid(row=3, column=0, padx=5, pady=5)
@@ -947,7 +950,7 @@ class ImageEditorWindow:
         root.bind("<Alt-minus>", lambda event: self.gif_maker(type="clear_all"))
         root.bind("<Shift-G>", lambda event: self.gif_maker(type="create"))
 
-        style = ttk.Style()
+        style = tk.ttk.Style()
         style.theme_use('clam')
         style.configure('TCombobox', background=self.button_color, fieldbackground=self.button_color,
                         foreground=self.text_color, font=('Verdana', 10), padding=(10, 5),
@@ -1122,7 +1125,7 @@ class ImageEditorWindow:
                 layers = [layer.name for layer in self.psd_layers]
                 layers.append("All Layers")
 
-                self.combo = ttk.Combobox(self.root, values=layers, style='TCombobox')
+                self.combo = tk.ttk.Combobox(self.root, values=layers, style='TCombobox')
                 self.combo.pack(pady=10)
                 self.combo.set(layers[-1])
                 self.combo.bind("<<ComboboxSelected>>", self.update_displayed_layer)
@@ -1132,7 +1135,6 @@ class ImageEditorWindow:
                 self.combo = None
         self.update_frame()
         self.play()
-        pass
 
     def redo(self, limit=""):
         if limit != "":
@@ -1148,7 +1150,7 @@ class ImageEditorWindow:
                 layers = [layer.name for layer in self.psd_layers]
                 layers.append("All Layers")
 
-                self.combo = ttk.Combobox(self.root, values=layers, style='TCombobox')
+                self.combo = tk.ttk.Combobox(self.root, values=layers, style='TCombobox')
                 self.combo.pack(pady=10)
                 self.combo.set(layers[-1])
                 self.combo.bind("<<ComboboxSelected>>", self.update_displayed_layer)
@@ -1158,7 +1160,6 @@ class ImageEditorWindow:
                 self.combo = None
         self.update_frame()
         self.play()
-        pass
 
     def on_exit(self):
         if self.picking_color:
@@ -1197,7 +1198,7 @@ class ImageEditorWindow:
                 layers = [layer.name for layer in self.psd_layers]
                 layers.append("All Layers")
 
-                self.combo = ttk.Combobox(self.root, values=layers, style='TCombobox')
+                self.combo = tk.ttk.Combobox(self.root, values=layers, style='TCombobox')
                 self.combo.pack(pady=10)
                 self.combo.set(layers[-1])
                 self.combo.bind("<<ComboboxSelected>>", self.update_displayed_layer)
@@ -1596,7 +1597,10 @@ class ImageEditorWindow:
         if self.painting:
             self.can_pan = False
             self.keep_paint = True
-            self.root.config(cursor=os.path.join(EXE_DIR, "@gui_images", "magicwndd.cur"))
+            try:
+                self.root.config(cursor=f'@{os.path.join(EXE_DIR, "gui_images", "magicwndd.cur").replace("\\", "/")}')
+            except:
+                print("Couldn't set custom cursor, skipping...")
             self.root.bind("<ButtonPress-1>", self.paint)
         else:
             self.can_pan = True
@@ -1611,7 +1615,10 @@ class ImageEditorWindow:
         self.pressed_escape = p
         if self.picking_color:
             self.can_pan = False
-            self.root.config(cursor=os.path.join(EXE_DIR, "@gui_images", "eyedropper.cur"))
+            try:
+                self.root.config(cursor=f'@{os.path.join(EXE_DIR, "gui_images", "eyedropper.cur").replace("\\", "/")}')
+            except:
+                print("Couldn't set custom cursor, skipping...")
             self.root.bind("<Button-1>", self.pick_color)
         else:
             self.can_pan = True
@@ -1635,7 +1642,10 @@ class ImageEditorWindow:
         self.pressed_escape = p
         if self.using_wand:
             self.can_pan = False
-            self.root.config(cursor=os.path.join(EXE_DIR, "@gui_images", "magicwndd.cur"))
+            try:
+                self.root.config(cursor=f'@{os.path.join(EXE_DIR, "gui_images", "magicwndd.cur").replace("\\", "/")}')
+            except:
+                print("Couldn't set custom cursor, skipping...")
             self.root.bind("<Button-1>", self.pick_wand)
         else:
             self.can_pan = True
@@ -1668,7 +1678,7 @@ class ImageEditorWindow:
                                            orient="horizontal", command=lambda val: self.change_outline(val, thr_value), font=('Verdana', 12),
                                            bd=0, highlightthickness=0, resolution=self.convert_unit(1))
 
-            self.outline_type = ttk.Combobox(self.root, values=["Circle", "Square", "Star"], font=('Verdana', 12), style='TCombobox')
+            self.outline_type = tk.ttk.Combobox(self.root, values=["Circle", "Square", "Star"], font=('Verdana', 12), style='TCombobox')
             self.outline_type.set("Circle")
             self.outline_type.bind("<<ComboboxSelected>>", self.on_type_change)
 
@@ -1926,7 +1936,7 @@ class ImageEditorWindow:
 
     def show_fps(self):
         if self.fps:
-            self.fps_label = ttk.Label(self.root, text="", background=self.button_color, foreground=self.text_color,
+            self.fps_label = tk.ttk.Label(self.root, text="", background=self.button_color, foreground=self.text_color,
                                        font=("Verdana", 12))
             self.fps_label.place(x=10, y=self.canvas.winfo_height())
 
@@ -2263,7 +2273,7 @@ class ImageEditorWindow:
         if self.fps: self.fps_label.config(background=self.button_color, foreground=self.text_color)
         self.draw_checkered_pattern(self.checker_color)
         self.info_label.configure(bg=self.bg_color, fg=self.text_color)
-        style = ttk.Style()
+        style = tk.ttk.Style()
         style.theme_use('clam')
         style.configure('TCombobox', background=self.button_color, fieldbackground=self.button_color,
                         foreground=self.text_color, font=('Verdana', 10), padding=(10, 5),
@@ -2812,10 +2822,10 @@ class ImageEditorWindow:
         print("Converting video to GIF (it may take a while)...")
         self.display_output("Converting video to GIF (it may take a while)...")
 
-        vid = iio.get_reader(video_path, 'ffmpeg')
+        vid = get_reader(video_path, 'ffmpeg')
 
         fps = vid.get_meta_data()['fps']
-        gif_writer = iio.get_writer('output.gif', fps=fps)
+        gif_writer = get_writer('output.gif', fps=fps)
 
         try:
             for frame in vid:
